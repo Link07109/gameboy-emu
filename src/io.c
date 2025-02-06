@@ -2,10 +2,14 @@
 #include "../include/timer.h"
 #include "../include/cpu.h"
 #include "../include/lcd.h"
+#include "../include/gamepad.h"
 
 static char serial_data[2];
 
 u8 io_read(u16 address) {
+    if (address == 0xFF00) { // Joypad
+        return gamepad_get_output();
+    }
     if (address == 0xFF01) { // SB - Serial Transfer Data (R/W)
         return serial_data[0];
     }
@@ -29,6 +33,10 @@ u8 io_read(u16 address) {
 }
 
 void io_write(u16 address, u8 val) {
+    if (address == 0xFF00) { // Joypad
+        gamepad_set_selected(val);
+        return;
+    }
     if (address == 0xFF01) { // SB - Serial Transfer Data (R/W)
         serial_data[0] = val;
         return;

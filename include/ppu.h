@@ -53,11 +53,24 @@ typedef struct {
     u8 f_bgp: 1;
 } oam_entry;
 
+typedef struct _oam_line_entry {
+    oam_entry entry;
+    struct _oam_line_entry* next;
+} oam_line_entry;
+
 typedef struct {
     oam_entry oam_ram[40];
     u8 vram[0x2000];
 
     pixel_fifo_context pfc;
+
+    u8 line_sprite_count; // up to 10
+    oam_line_entry* line_sprites; // linked list
+    oam_line_entry line_entry_array[10]; // memory for linked list so we dont have to call malloc/free a bunch
+
+    u8 fetched_entry_count;
+    oam_entry fetched_entries[3]; // fetched during pipeline
+    u8 window_line;
 
     u32 current_frame;
     u32 line_ticks;

@@ -21,6 +21,10 @@ void ppu_init() {
     ppu_ctx.pfc.pixel_fifo.head = ppu_ctx.pfc.pixel_fifo.tail = NULL;
     ppu_ctx.pfc.cur_fetch_state = FS_TILE;
 
+    ppu_ctx.line_sprites = 0;
+    ppu_ctx.fetched_entry_count = 0;
+    ppu_ctx.window_line = 0;
+
     lcd_init();
     LCDS_MODE_SET(MODE_OAM);
 

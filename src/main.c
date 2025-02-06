@@ -7,6 +7,7 @@
 #include "dbg.c"
 #include "dma.c"
 #include "emu.c"
+#include "gamepad.c"
 #include "instructions.c"
 #include "interrupts.c"
 #include "io.c"
