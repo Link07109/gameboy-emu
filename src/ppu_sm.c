@@ -1,6 +1,7 @@
 #include "../include/ppu.h"
 #include "../include/lcd.h"
 #include "../include/interrupts.h"
+#include "../include/cart.h"
 #include <string.h>
 
 void pipeline_process();
@@ -151,9 +152,15 @@ void ppu_mode_hblank() {
             }
 
             if (end - start_timer >= 1000) {
-                //u32 fps = frame_count;
+                u32 fps = frame_count;
                 start_timer = end;
                 frame_count = 0;
+
+                printf("FPS: %d\n", fps);
+
+                if (cart_need_save()) {
+                    cart_battery_save();
+                }
             }
 
             frame_count++;

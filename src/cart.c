@@ -1,13 +1,45 @@
 #include "../include/cart.h"
+#include <stdio.h>
+#include <string.h>
 
 typedef struct {
     char filename[1024];
     u32 rom_size;
     u8* rom_data;
     rom_header* header;
+
+    // MBC1 data
+    u8* rom_bank_x;
+    u8 banking_mode;
+
+    u8 rom_bank_value;
+    u8 ram_bank_value;
+
+    bool ram_enabled;
+    bool ram_banking;
+
+    u8* ram_bank; // currently selected
+    u8* ram_banks[16]; // all of em
+
+    // for battery
+    bool battery;
+    bool need_save; // save battery backup
 } cart_context;
 
 static cart_context cart_ctx;
+
+bool cart_need_save() {
+    return cart_ctx.need_save;
+}
+
+bool cart_mbc1() {
+    return BETWEEN(cart_ctx.header->type, 1, 3);
+}
+
+bool cart_battery() {
+    // mbc1 only for now
+    return cart_ctx.header->type == 3;
+}
 
 static const char* ROM_TYPES[] = {
     "ROM ONLY",
@@ -135,6 +167,51 @@ const char* cart_type_name() {
     return "UNKNOWN";
 }
 
+void cart_setup_banking() {
+    for (int i = 0; i < 16; i++) {
+        cart_ctx.ram_banks[i] = 0;
+
+        if ((cart_ctx.header->ram_size == 2 && i == 0) ||
+                (cart_ctx.header->ram_size == 3 && i < 4) ||
+                (cart_ctx.header->ram_size == 4 && i < 16) ||
+                (cart_ctx.header->ram_size == 5 && i < 8)) {
+            cart_ctx.ram_banks[i] = malloc(0x2000);
+            memset(cart_ctx.ram_banks[i], 0, 0x2000);
+        }
+    }
+
+    cart_ctx.ram_bank = cart_ctx.ram_banks[0];
+    cart_ctx.rom_bank_x = cart_ctx.rom_data + 0x4000; // rom bank 1
+}
+
+void cart_battery_load() {
+    char fn[1048];
+    sprintf(fn, "%s.battery", cart_ctx.filename);
+    FILE* fp = fopen(fn, "rb");
+
+    if (!fp) {
+        fprintf(stderr, "FAILED TO OPEN: %s\n", fn);
+        return;
+    }
+
+    fread(cart_ctx.ram_bank, 0x2000, 1, fp);
+    fclose(fp);
+}
+
+void cart_battery_save() {
+    char fn[1048];
+    sprintf(fn, "%s.battery", cart_ctx.filename);
+    FILE* fp = fopen(fn, "wb");
+
+    if (!fp) {
+        fprintf(stderr, "FAILED TO OPEN: %s\n", fn);
+        return;
+    }
+
+    fwrite(cart_ctx.ram_bank, 0x2000, 1, fp);
+    fclose(fp);
+}
+
 void print_cart_info(cart_context ctx) {
     printf("\t Title    : %s\n", ctx.header->title);
     printf("\t Type     : %2.2X (%s)\n", ctx.header->type, cart_type_name());
@@ -167,9 +244,13 @@ bool cart_load(char* cart) {
 
     cart_ctx.header = (rom_header*)(cart_ctx.rom_data + 0x100);
     cart_ctx.header->title[15] = 0; // null terminate string just in case
+    cart_ctx.battery = cart_battery();
+    cart_ctx.need_save = false;
 
     printf("Cartridge Loaded:\n");
     print_cart_info(cart_ctx);
+
+    cart_setup_banking();
 
     u16 checksum = 0;
     for (u16 address = 0x0134; address <= 0x014C; address++) {
@@ -178,15 +259,88 @@ bool cart_load(char* cart) {
 
     printf("\t Checksum : %2.2X (%s)\n", cart_ctx.header->checksum, (checksum & 0xFF) ? "PASSED" : "FAILED");
 
+    if (cart_ctx.battery) {
+        cart_battery_load();
+    }
+
     return true;
 }
 
-// for now just ROM ONLY supported ( so no zelda :c )
 u8 cart_read(u16 address) {
-    return cart_ctx.rom_data[address];
+    if (!cart_mbc1() || address < 0x4000) {
+        return cart_ctx.rom_data[address];
+    }
+
+    if ((address & 0xE000) == 0xA000) {
+        if (!cart_ctx.ram_enabled) { // error!
+            return 0xFF;
+        }
+        if (!cart_ctx.ram_bank) { // error!
+            return 0xFF;
+        }
+
+        return cart_ctx.ram_bank[address - 0xA000];
+    }
+    
+    return cart_ctx.rom_bank_x[address - 0x4000];
 }
 
 void cart_write(u16 address, u8 value) {
-    printf("UNSUPPORTED cart_write(%04X)\n", address);
-    //NO_IMPL
+    if (!cart_mbc1()) { // error!
+        return;
+    }
+
+    if (address < 0x2000) {
+        cart_ctx.ram_enabled = ((value & 0xF) == 0xA);
+    }
+
+    if ((address & 0xE000) == 0x2000) { // rom bank number
+        if (value == 0) {
+            value = 1;
+        }
+
+        value &= 0b11111; // only last 5 bits used
+
+        cart_ctx.rom_bank_value = value;
+        cart_ctx.rom_bank_x = cart_ctx.rom_data + (0x4000 * cart_ctx.rom_bank_value);
+    }
+
+    if ((address & 0xE000) == 0x4000) { // ram bank number
+        cart_ctx.ram_bank_value = value & 0b11;
+
+        if (cart_ctx.ram_banking) {
+            if (cart_need_save()) {
+                cart_battery_save();
+            }
+            cart_ctx.ram_bank = cart_ctx.ram_banks[cart_ctx.ram_bank_value];
+        }
+    }
+
+    if ((address & 0xE000) == 0x6000) { // banking mode select
+        cart_ctx.banking_mode = value & 1;
+        cart_ctx.ram_banking = cart_ctx.banking_mode;
+
+        if (cart_ctx.ram_banking) {
+            if (cart_need_save()) {
+                cart_battery_save();
+            }
+            cart_ctx.ram_bank = cart_ctx.ram_banks[cart_ctx.ram_bank_value];
+        }
+    }
+
+    if ((address & 0xE000) == 0xA000) { // memory region
+        if (!cart_ctx.ram_enabled) {
+            return;
+        }
+
+        if (!cart_ctx.ram_bank) {
+            return;
+        }
+
+        cart_ctx.ram_bank[address - 0xA000] = value;
+
+        if (cart_ctx.battery) {
+            cart_ctx.need_save = true;
+        }
+    }
 }

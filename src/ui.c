@@ -17,7 +17,8 @@ SDL_Renderer* sdl_debug_renderer;
 SDL_Texture* sdl_debug_texture;
 SDL_Surface* debug_screen;
 
-static int scale = 4;
+static int scale = 5;
+static int debug_scale = 4;
 
 void delay(u32 ms) {
     SDL_Delay(ms);
@@ -37,9 +38,9 @@ void ui_init() {
     screen = SDL_CreateRGBSurface(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    SDL_CreateWindowAndRenderer(16*8*scale, 32*8*scale, 0, &sdl_debug_window, &sdl_debug_renderer);
-    debug_screen = SDL_CreateRGBSurface(0, (16*8*scale) + (16*scale), (32*8*scale) + (64*scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
-    sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, (16*8*scale) + (16*scale), (32*8*scale) + (64*scale));
+    SDL_CreateWindowAndRenderer(16*8*debug_scale, 32*8*debug_scale, 0, &sdl_debug_window, &sdl_debug_renderer);
+    debug_screen = SDL_CreateRGBSurface(0, (16*8*debug_scale) + (16*debug_scale), (32*8*debug_scale) + (64*debug_scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+    sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, (16*8*debug_scale) + (16*debug_scale), (32*8*debug_scale) + (64*debug_scale));
     
     int x, y;
     SDL_GetWindowPosition(sdl_window, &x, &y);
@@ -61,10 +62,10 @@ void display_tile(SDL_Surface* surface, u16 start_location, u16 tile_num, int x,
 
             u8 color = hi | lo;
 
-            rc.x = x + ((7 - bit) * scale);
-            rc.y = y + (tile_y / 2 * scale);
-            rc.w = scale;
-            rc.h = scale;
+            rc.x = x + ((7 - bit) * debug_scale);
+            rc.y = y + (tile_y / 2 * debug_scale);
+            rc.w = debug_scale;
+            rc.h = debug_scale;
 
             SDL_FillRect(surface, &rc, tile_colors[color]);
         }
@@ -87,12 +88,12 @@ void update_debug_window() {
 
     for (int y = 0; y < 24; y++) {
         for (int x = 0; x < 16; x++) {
-            display_tile(debug_screen, addr, tile_num, x_draw + (x * scale), y_draw + (y * scale));
-            x_draw += 8 * scale;
+            display_tile(debug_screen, addr, tile_num, x_draw + (x * debug_scale), y_draw + (y * debug_scale));
+            x_draw += 8 * debug_scale;
             tile_num++;
         }
 
-        y_draw += 8 * scale;
+        y_draw += 8 * debug_scale;
         x_draw = 0;
     }
 
