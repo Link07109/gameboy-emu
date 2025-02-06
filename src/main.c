@@ -1,3 +1,4 @@
+#include "apu.c"
 #include "bus.c"
 #include "cart.c"
 #include "cpu.c"

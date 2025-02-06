@@ -3,6 +3,7 @@
 #include "../include/cpu.h"
 #include "../include/lcd.h"
 #include "../include/gamepad.h"
+#include "../include/apu.h"
 
 static char serial_data[2];
 
@@ -23,7 +24,7 @@ u8 io_read(u16 address) {
         return cpu_get_int_flags();
     }
     if (BETWEEN(address, 0xFF10, 0xFF3F)) { // Audio
-        // TODO:
+        return apu_read(address);
     }
     if (BETWEEN(address, 0xFF40, 0xFF4B)) { // LCD
         return lcd_read(address);
@@ -54,7 +55,8 @@ void io_write(u16 address, u8 val) {
         return;
     }
     if (BETWEEN(address, 0xFF10, 0xFF3F)) { // Audio
-        // TODO:
+        apu_write(address, val);
+        return;
     }
     if (BETWEEN(address, 0xFF40, 0xFF4B)) { // LCD
         lcd_write(address, val);
