@@ -5,10 +5,11 @@
 #include "../include/timer.h"
 #include "../include/dma.h"
 #include "../include/ppu.h"
+#include "../include/apu.h"
 
 // posix only, need something different for windows
 #include <pthread.h>
-#include <unistd.h>
+#include <time.h>
 
 /*
  * Emulator components:
@@ -28,6 +29,7 @@ emu_context* emu_get_context() {
 
 void* cpu_run(void* p) {
     timer_init();
+    apu_init();
     cpu_init();
     ppu_init();
 
@@ -59,7 +61,7 @@ int emu_run(int argc, char** argv) {
         printf("Failed to load ROM file: %s\n", argv[1]);
         return -2;
     }
-    printf("Cart loaded...\n");
+    printf("Cart Loaded Successfully!\n");
 
     ui_init();
 
@@ -72,7 +74,12 @@ int emu_run(int argc, char** argv) {
     u32 prev_frame = 0;
     
     while (!emu_ctx.die) {
-        usleep(1000);
+        struct timespec interval = {
+            .tv_sec = 0,
+            .tv_nsec = 1000*1000 // usleep(1000);
+        };
+        nanosleep(&interval, NULL);
+
         ui_handle_events();
 
         if (prev_frame != ppu_get_context()->current_frame) {
@@ -82,6 +89,8 @@ int emu_run(int argc, char** argv) {
         prev_frame = ppu_get_context()->current_frame;
     }
 
+    ui_free();
+
     return 0;
 }
 
@@ -90,6 +99,7 @@ void emu_cycles(int cpu_cycles) {
         for (int n = 0; n < 4; n++) {
             emu_ctx.ticks++;
             timer_tick();
+            apu_tick();
             ppu_tick();
         }
 

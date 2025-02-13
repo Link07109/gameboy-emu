@@ -1,12 +1,17 @@
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_audio.h>
+#include <SDL2/SDL_ttf.h>
+#include <assert.h>
+#include <time.h>
+
 #include "../include/ui.h"
 #include "../include/emu.h"
 #include "../include/bus.h"
 #include "../include/ppu.h"
 #include "../include/gamepad.h"
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_ttf.h>
+#include "../include/apu.h"
 
+// graphics
 SDL_Window* sdl_window;
 SDL_Renderer* sdl_renderer;
 SDL_Texture* sdl_texture;
@@ -20,6 +25,11 @@ SDL_Surface* debug_screen;
 static int scale = 5;
 static int debug_scale = 4;
 
+// audio
+SDL_AudioSpec obtained;
+int device;
+buffer hw_buf;
+
 void delay(u32 ms) {
     SDL_Delay(ms);
 }
@@ -28,19 +38,70 @@ u32 get_ticks() {
     return SDL_GetTicks();
 }
 
+void audio_play(void* buf, u32 count) {
+    int overqueued = SDL_GetQueuedAudioSize(device) - obtained.size;
+    float delaynanos = (float)overqueued / 4.0 / obtained.freq * 1000000000.0; // 1billion nano = 1 second
+
+    struct timespec interval = {
+        .tv_sec = 0,
+        .tv_nsec = (long)delaynanos
+    };
+
+    if (overqueued > obtained.size) { // > 0
+        //nanosleep(&interval, NULL);
+    }
+
+    if (SDL_QueueAudio(device, buf, count) != 0) {
+        fprintf(stderr, "Could not write SDL audio data: %s\n", SDL_GetError());
+        exit(-9);
+    }
+    SDL_PauseAudioDevice(device, 0);
+}
+
+void audio_init() {
+    SDL_Init(SDL_INIT_AUDIO);
+    printf("AUDIO INIT\n");
+
+    SDL_AudioSpec desired;
+    SDL_zero(desired);
+    desired.freq = 44100;
+    desired.channels = 2;
+    desired.samples = 512;
+    desired.callback = NULL;
+    desired.format = AUDIO_S16LSB;
+
+    device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+    if (device == 0) {
+        fprintf(stderr, "Could Not Open Audio Device: %s\n", SDL_GetError());
+        exit(-9);
+    }
+
+    printf("== audio stats:\n");
+    printf("freq: %d\n", obtained.freq);
+    printf("samples: %d\n", obtained.samples);
+    printf("size: %d\n", obtained.size);
+
+    hw_buf.samples = obtained.samples;
+    hw_buf.bytes = obtained.samples * sizeof(i16) * obtained.channels;
+    printf("calc bytes: %d\n", hw_buf.bytes);
+    hw_buf.data = malloc(hw_buf.bytes);
+    apu_get_context()->sound_buf = &hw_buf;
+}
+
 void ui_init() {
     SDL_Init(SDL_INIT_VIDEO);
     printf("SDL INIT\n");
     TTF_Init();
     printf("TTF INIT\n");
+    audio_init();
 
     SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, 0, &sdl_window, &sdl_renderer);
     screen = SDL_CreateRGBSurface(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    SDL_CreateWindowAndRenderer(16*8*debug_scale, 32*8*debug_scale, 0, &sdl_debug_window, &sdl_debug_renderer);
-    debug_screen = SDL_CreateRGBSurface(0, (16*8*debug_scale) + (16*debug_scale), (32*8*debug_scale) + (64*debug_scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
-    sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, (16*8*debug_scale) + (16*debug_scale), (32*8*debug_scale) + (64*debug_scale));
+    SDL_CreateWindowAndRenderer(DEBUG_SCREEN_WIDTH, DEBUG_SCREEN_HEIGHT, 0, &sdl_debug_window, &sdl_debug_renderer);
+    debug_screen = SDL_CreateRGBSurface(0, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+    sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale));
     
     int x, y;
     SDL_GetWindowPosition(sdl_window, &x, &y);
@@ -127,7 +188,7 @@ void ui_update() {
     SDL_RenderCopy(sdl_renderer, sdl_texture, NULL, NULL);
     SDL_RenderPresent(sdl_renderer);
 
-    update_debug_window();
+    //update_debug_window();
 }
 
 void ui_on_key(bool down, u32 key_code) {
@@ -140,6 +201,21 @@ void ui_on_key(bool down, u32 key_code) {
         case SDLK_s: gamepad_get_state()->down = down; break;
         case SDLK_a: gamepad_get_state()->left = down; break;
         case SDLK_d: gamepad_get_state()->right = down; break;
+
+        case SDLK_SPACE: 
+            printf("play sound key\n");
+            SDL_PauseAudioDevice(device, 0);
+            break;
+        case SDLK_p:
+            printf("pause sound key\n");
+            SDL_PauseAudioDevice(device, 1);
+            break;
+    }
+}
+
+void ui_free() {
+    if (hw_buf.data) {
+        free(hw_buf.data);
     }
 }
 

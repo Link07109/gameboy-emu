@@ -52,9 +52,9 @@ static bool is_16_bit(reg_type rt) {
 
 static void proc_cb(cpu_context* ctx) {
     u8 op = ctx->fetched_data;
-    reg_type reg = decode_reg(op & 0b0111);
-    u8 bit = (op >> 3) & 0b0111;
-    u8 bit_op = (op >> 6) & 0b0011;
+    reg_type reg = decode_reg(op & 0b111);
+    u8 bit = (op >> 3) & 0b111;
+    u8 bit_op = (op >> 6) & 0b11;
     u8 reg_val = cpu_read_reg8(reg);
 
     emu_cycles(1);
