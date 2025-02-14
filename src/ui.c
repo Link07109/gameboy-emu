@@ -40,15 +40,16 @@ u32 get_ticks() {
 
 void audio_play(void* buf, u32 count) {
     int overqueued = SDL_GetQueuedAudioSize(device) - obtained.size;
-    float delaynanos = (float)overqueued / 4.0 / obtained.freq * 1000000000.0; // 1billion nano = 1 second
+    float delay_nanos = (float)overqueued / 4.0 / obtained.freq * 1000000000.0; // 1billion nano = 1 second
 
     struct timespec interval = {
         .tv_sec = 0,
-        .tv_nsec = (long)delaynanos
+        .tv_nsec = (long)delay_nanos
     };
 
-    if (overqueued > obtained.size) { // > 0
-        //nanosleep(&interval, NULL);
+    if (overqueued > 0) {
+        nanosleep(&interval, NULL);
+        return;
     }
 
     if (SDL_QueueAudio(device, buf, count) != 0) {
@@ -66,9 +67,9 @@ void audio_init() {
     SDL_zero(desired);
     desired.freq = 44100;
     desired.channels = 2;
-    desired.samples = 512;
+    desired.samples = 1024;
     desired.callback = NULL;
-    desired.format = AUDIO_S16LSB;
+    desired.format = AUDIO_S32LSB;
 
     device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (device == 0) {
@@ -81,9 +82,12 @@ void audio_init() {
     printf("samples: %d\n", obtained.samples);
     printf("size: %d\n", obtained.size);
 
+    int calc_bytes = obtained.samples * sizeof(float) * obtained.channels;
+    printf("calc bytes: %d\n", calc_bytes);
+    assert(obtained.size == calc_bytes);
+
     hw_buf.samples = obtained.samples;
-    hw_buf.bytes = obtained.samples * sizeof(i16) * obtained.channels;
-    printf("calc bytes: %d\n", hw_buf.bytes);
+    hw_buf.bytes = obtained.size;
     hw_buf.data = malloc(hw_buf.bytes);
     apu_get_context()->sound_buf = &hw_buf;
 }
@@ -99,13 +103,15 @@ void ui_init() {
     screen = SDL_CreateRGBSurface(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    /*
     SDL_CreateWindowAndRenderer(DEBUG_SCREEN_WIDTH, DEBUG_SCREEN_HEIGHT, 0, &sdl_debug_window, &sdl_debug_renderer);
     debug_screen = SDL_CreateRGBSurface(0, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale));
+    */
     
     int x, y;
     SDL_GetWindowPosition(sdl_window, &x, &y);
-    SDL_SetWindowPosition(sdl_debug_window, x + SCREEN_WIDTH + 10, y);
+    //SDL_SetWindowPosition(sdl_debug_window, x + SCREEN_WIDTH + 10, y);
 }
 
 static unsigned long tile_colors[4] = { 0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000 };
@@ -215,6 +221,7 @@ void ui_on_key(bool down, u32 key_code) {
 
 void ui_free() {
     if (hw_buf.data) {
+        // corrupted unsorted chunks
         free(hw_buf.data);
     }
 }

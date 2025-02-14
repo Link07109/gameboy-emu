@@ -5,7 +5,7 @@
 typedef struct {
     u32 samples;
     u32 bytes;
-    i16* data;
+    float* data;
 } buffer;
 
 typedef struct {
@@ -13,7 +13,7 @@ typedef struct {
     u8 active: 1;
     u8 mute: 1;
 
-    i16 level;
+    float level;
     u8 left_enable: 1;
     u8 right_enable: 1;
 
@@ -63,9 +63,9 @@ typedef struct {
     u8 apu_on;
 
     // [0] = left, [1] = right
-    i16 capacitors[2];
-    i16 mixer_out[2];
-    i16 volume_out[2];
+    float capacitors[2];
+    float mixer_out[2];
+    float volume_out[2];
 
     double hpf_constant;
     u8 hpf_enabled;
@@ -120,3 +120,5 @@ void apu_tick();
 
 u8 apu_read(u16 address);
 void apu_write(u16 address, u8 value);
+
+void apu_queue_audio();

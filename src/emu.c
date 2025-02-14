@@ -65,8 +65,8 @@ int emu_run(int argc, char** argv) {
 
     ui_init();
 
-    pthread_t t1;
-    if (pthread_create(&t1, NULL, cpu_run, NULL)) {
+    pthread_t cpu_thread;
+    if (pthread_create(&cpu_thread, NULL, cpu_run, NULL)) {
         fprintf(stderr, "FAILED TO START MAIN CPU THREAD!\n");
         return -1;
     }
@@ -84,11 +84,13 @@ int emu_run(int argc, char** argv) {
 
         if (prev_frame != ppu_get_context()->current_frame) {
             ui_update();
+            //apu_queue_audio();
         }
 
         prev_frame = ppu_get_context()->current_frame;
     }
 
+    //pthread_join(cpu_thread, NULL);
     ui_free();
 
     return 0;
