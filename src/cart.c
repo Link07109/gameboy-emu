@@ -235,7 +235,6 @@ bool cart_load(char* cart) {
 
     fseek(fp, 0, SEEK_END);
     cart_ctx.rom_size = ftell(fp);
-
     rewind(fp);
 
     cart_ctx.rom_data = malloc(cart_ctx.rom_size);

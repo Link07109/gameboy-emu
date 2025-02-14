@@ -11,4 +11,3 @@ static const int DEBUG_SCREEN_HEIGHT = 798;
 void ui_init();
 void ui_handle_events();
 void ui_update();
-void ui_free();

@@ -84,14 +84,12 @@ int emu_run(int argc, char** argv) {
 
         if (prev_frame != ppu_get_context()->current_frame) {
             ui_update();
-            //apu_queue_audio();
         }
 
         prev_frame = ppu_get_context()->current_frame;
     }
 
     //pthread_join(cpu_thread, NULL);
-    ui_free();
 
     return 0;
 }

@@ -48,7 +48,8 @@ void audio_play(void* buf, u32 count) {
     };
 
     if (overqueued > 0) {
-        nanosleep(&interval, NULL);
+        //nanosleep(&interval, NULL);
+        //SDL_ClearQueuedAudio(device);
         return;
     }
 
@@ -56,7 +57,6 @@ void audio_play(void* buf, u32 count) {
         fprintf(stderr, "Could not write SDL audio data: %s\n", SDL_GetError());
         exit(-9);
     }
-    SDL_PauseAudioDevice(device, 0);
 }
 
 void audio_init() {
@@ -69,7 +69,7 @@ void audio_init() {
     desired.channels = 2;
     desired.samples = 1024;
     desired.callback = NULL;
-    desired.format = AUDIO_S32LSB;
+    desired.format = AUDIO_F32SYS;
 
     device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (device == 0) {
@@ -77,18 +77,21 @@ void audio_init() {
         exit(-9);
     }
 
+    SDL_PauseAudioDevice(device, 0);
     printf("== audio stats:\n");
     printf("freq: %d\n", obtained.freq);
     printf("samples: %d\n", obtained.samples);
     printf("size: %d\n", obtained.size);
+    printf("format: %hu\n", obtained.format);
 
     int calc_bytes = obtained.samples * sizeof(float) * obtained.channels;
     printf("calc bytes: %d\n", calc_bytes);
     assert(obtained.size == calc_bytes);
+    assert(obtained.samples == 1024);
 
     hw_buf.samples = obtained.samples;
     hw_buf.bytes = obtained.size;
-    hw_buf.data = malloc(hw_buf.bytes);
+    hw_buf.sample_index = 0;
     apu_get_context()->sound_buf = &hw_buf;
 }
 
@@ -107,11 +110,11 @@ void ui_init() {
     SDL_CreateWindowAndRenderer(DEBUG_SCREEN_WIDTH, DEBUG_SCREEN_HEIGHT, 0, &sdl_debug_window, &sdl_debug_renderer);
     debug_screen = SDL_CreateRGBSurface(0, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale), 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     sdl_debug_texture = SDL_CreateTexture(sdl_debug_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, DEBUG_SCREEN_WIDTH + (16*debug_scale), DEBUG_SCREEN_HEIGHT + (16*debug_scale));
-    */
     
     int x, y;
     SDL_GetWindowPosition(sdl_window, &x, &y);
-    //SDL_SetWindowPosition(sdl_debug_window, x + SCREEN_WIDTH + 10, y);
+    SDL_SetWindowPosition(sdl_debug_window, x + SCREEN_WIDTH + 10, y);
+    */
 }
 
 static unsigned long tile_colors[4] = { 0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000 };
@@ -216,13 +219,6 @@ void ui_on_key(bool down, u32 key_code) {
             printf("pause sound key\n");
             SDL_PauseAudioDevice(device, 1);
             break;
-    }
-}
-
-void ui_free() {
-    if (hw_buf.data) {
-        // corrupted unsorted chunks
-        free(hw_buf.data);
     }
 }
 

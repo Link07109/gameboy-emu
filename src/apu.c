@@ -382,7 +382,7 @@ static void trigger(channel* chan) {
 }
 
 static void pulse_channel_reg1_write(u8 value, channel* chan) {
-    chan->duty_val = duty_lookup[value >> 6];
+    chan->duty_val = duty_lookup[(value >> 6) & 3];
     chan->initial_length_timer = value & 0x3F; // 0b00111111
     chan->length_timer_counter = 64 - chan->initial_length_timer;
 }
@@ -705,7 +705,7 @@ static void mixer() {
 // once from nr50 (never mutes non-silent input)
 // once from volume knob (this can tho)
 // after this, they go through hpf
-static void volume(i16 vol_mult) {
+static void volume(float vol_mult) {
     i8 left_vol = apu_ctx.left_volume; // from nr50
     i8 right_vol = apu_ctx.right_volume; // from nr50
 
@@ -726,6 +726,7 @@ static void volume(i16 vol_mult) {
 }
 
 // high pass filter
+// FIX: i think this might be fucked
 static float hpf(float volume_output, u8 index) {
     i16 out = 0;
 
@@ -740,31 +741,25 @@ static float hpf(float volume_output, u8 index) {
     return out;
 }
 
-static void set_sound_buf_out() {
-    assert(apu_ctx.sound_buf->data != NULL);
-    float* p_out = apu_ctx.sound_buf->data;
-
-    float left = apu_ctx.volume_out[0];// hpf 0
-    float right = apu_ctx.volume_out[1]; // hpf 1
-
-    for (int i = 0; i < apu_ctx.sound_buf->samples; i++) { 
-        p_out[i*2] = left;
-        p_out[i*2 + 1] = right;
+static void set_sound_buffer() {
+    if (apu_ctx.sound_buf->sample_index >= apu_ctx.sound_buf->samples*2) {
+        apu_queue_audio();
+        apu_ctx.sound_buf->sample_index = 0;
     }
+
+    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.volume_out[0];
+    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.volume_out[1];
 }
 
 static void prepare_output_buffer() {
     mixer();
-    volume(1);
-    set_sound_buf_out();
+    volume(.01);
+    set_sound_buffer();
 }
 
-// called once per frame
 void apu_queue_audio() {
-    prepare_output_buffer();
     assert(apu_ctx.sound_buf->data != NULL);
     audio_play(apu_ctx.sound_buf->data, apu_ctx.sound_buf->bytes);
-
     memset(apu_ctx.sound_buf->data, 0, apu_ctx.sound_buf->bytes);
 }
 
@@ -786,13 +781,6 @@ void apu_tick() {
         return;
     }
 
-    apu_ctx.sound_div_counter--;
-
-    if (apu_ctx.sound_div_counter <= 0) {
-        apu_ctx.sound_div_counter = apu_ctx.sound_div_tc;
-        //prepare_output_buffer();
-    }
-
 
     for (int i = 0; i < 2; i++) {
         channel* pulse_channel = &apu_ctx.channels[i];
@@ -802,12 +790,12 @@ void apu_tick() {
         }
 
         i8 amplitude = (pulse_channel->duty_val >> pulse_channel->duty_step_counter) & 1;
-        pulse_channel->level = dac(pulse_channel, amplitude);
+        pulse_channel->level = 0;//dac(pulse_channel, amplitude);
 
         pulse_channel->period_div_counter--;
 
         if (pulse_channel->period_div_counter <= 0) {
-            pulse_channel->period_div_counter = pulse_channel->period_div_tc * 4; // * 4 bc once per every 4 ticks
+            pulse_channel->period_div_counter = pulse_channel->period_div_tc * 4;
 
             pulse_channel->duty_step_counter++;
             pulse_channel->duty_step_counter &= 7; // % 8
@@ -843,5 +831,13 @@ void apu_tick() {
 
             noise_channel->level = dac(noise_channel, ~lfsr_next_value() & 1);
         }
+    }
+
+
+    apu_ctx.sound_div_counter--;
+
+    if (apu_ctx.sound_div_counter <= 0) {
+        apu_ctx.sound_div_counter = apu_ctx.sound_div_tc;
+        prepare_output_buffer();
     }
 }

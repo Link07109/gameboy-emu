@@ -5,7 +5,8 @@
 typedef struct {
     u32 samples;
     u32 bytes;
-    float* data;
+    u32 sample_index;
+    float data[2048];
 } buffer;
 
 typedef struct {
