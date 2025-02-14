@@ -789,13 +789,13 @@ void apu_tick() {
             continue;
         }
 
-        i8 amplitude = (pulse_channel->duty_val >> pulse_channel->duty_step_counter) & 1;
-        pulse_channel->level = 0;//dac(pulse_channel, amplitude);
-
         pulse_channel->period_div_counter--;
 
         if (pulse_channel->period_div_counter <= 0) {
             pulse_channel->period_div_counter = pulse_channel->period_div_tc * 4;
+
+            i8 amplitude = (pulse_channel->duty_val >> pulse_channel->duty_step_counter) & 1;
+            pulse_channel->level = dac(pulse_channel, amplitude);
 
             pulse_channel->duty_step_counter++;
             pulse_channel->duty_step_counter &= 7; // % 8
