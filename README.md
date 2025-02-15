@@ -1,5 +1,13 @@
 # gameboy-emu
-Game Boy emulator written in C (for fun)
+Game Boy emulator written in C! (for fun)
+
+## Build Instuctions:
+1. install nix
+2. run `nix develop` to enter the development shell that has all the dependencies included
+3. run `./build.sh` from within this development shell to build the project
+
+## Usage:
+run `./gameboy.out <path_to_rom_here>`
 
 ## Credits:
 ### CPU and PPU:

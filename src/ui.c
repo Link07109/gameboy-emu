@@ -1,6 +1,5 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
-#include <SDL2/SDL_ttf.h>
 #include <assert.h>
 #include <time.h>
 
@@ -96,8 +95,6 @@ void audio_init() {
 void ui_init() {
     SDL_Init(SDL_INIT_VIDEO);
     printf("SDL INIT\n");
-    TTF_Init();
-    printf("TTF INIT\n");
     audio_init();
 
     SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, 0, &sdl_window, &sdl_renderer);
