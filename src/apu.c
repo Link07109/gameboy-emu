@@ -13,7 +13,9 @@ apu_context* apu_get_context() {
 void audio_play(void* buf, u32 count);
 
 static const i32 GB_CLOCK = 4194304;
-static const u8 duty_lookup[4] = { 0x02, 0x03, 0x0F, 0xFC };
+static const u8 duty_lookup[4] = { 0b00000001, 0b10000001, 0b10000111, 0b01111110 };
+static const u8 wave_volume_lookup[4] = { 4, 0, 1, 2 };
+static const u8 length_timer_channel_masks[4] = { 0b1, 0b10, 0b100, 0b1000 };
 
 static void lfsr_reset() {
     apu_ctx.lfsr = ((1 << 15) - 1);
@@ -32,13 +34,19 @@ static int lfsr_next_value() {
     return apu_ctx.lfsr;
 }
 
-static void update_filter() {
-    //double cap_constant = pow(apu_ctx.hpf_constant, (double)GB_CLOCK / apu_ctx.sample_rate); // constant pow of 95.108934240362 
-    // cap_constant = 0.9960133089108
-    apu_ctx.capacitor_factor = 65275;//round(65536.0 * cap_constant); // = 65274.728212781
+static u8 get_channel_index(channel* chan) {
+    u8 index = 0;
+
+    for (int i = 0; i < 4; i++) {
+        if (chan == &apu_ctx.channels[i]) {
+            index = i;
+        }
+    }
+
+    return index;
 }
 
-void update_length_timer(channel* chan) {
+static void update_length_timer(channel* chan) {
     if (!chan->length_timer_enable) {
         return;
     }
@@ -46,7 +54,10 @@ void update_length_timer(channel* chan) {
     chan->length_timer_counter--;
 
     if (chan->length_timer_counter <= 0) {
+        chan->length_timer_enable = 0;
         chan->active = 0;
+
+        //apu_write(0xFF26, apu_read(0xFF26) ^ length_masks[get_channel_index(chan)]);
 
         chan->env_volume = 0;
         chan->env_sweep_pace = 0; // apu_write() this?
@@ -84,7 +95,7 @@ static void div_apu_clock() {
     bool clock_len = false;
     bool clock_env = false;
 
-    switch (apu_ctx.sequence_counter & 7) { // same as % 8
+    switch (apu_ctx.sequence_counter) {
         case 0:
             clock_len = true;
             break;
@@ -110,6 +121,7 @@ static void div_apu_clock() {
             break;
     }
     apu_ctx.sequence_counter++;
+    apu_ctx.sequence_counter &= 7; // %8
 
     channel* ch1 = &apu_ctx.channels[0];
     if (clock_sweep) {
@@ -173,19 +185,6 @@ static void div_apu_clock() {
 
         }
     }
-
-    /*
-    if (apu_ctx.master_fade) {
-        apu_ctx.master_volume += apu_ctx.master_fade;
-
-        if ((apu_ctx.master_fade > 0 && apu_ctx.master_volume >= apu_ctx.master_dstvol) ||
-                (apu_ctx.master_fade < 0 && apu_ctx.master_volume <= apu_ctx.master_dstvol)) {
-
-            apu_ctx.master_fade = 0;
-            apu_ctx.master_volume = apu_ctx.master_dstvol;
-        }
-    }
-    */
 }
 
 void apu_reset() {
@@ -226,9 +225,8 @@ void apu_reset() {
 void apu_init() {
     apu_ctx.apu_on = 1;
 
-    apu_ctx.hpf_constant = 0.999958;
+    apu_ctx.hpf_constant = 0.996;
     apu_ctx.hpf_enabled = 1;
-    apu_ctx.capacitor_factor = 0x10000; // 65536.0
 
     apu_ctx.panning = 0;
     apu_ctx.master_control = 0;
@@ -243,13 +241,9 @@ void apu_init() {
 
     apu_ctx.sound_div_tc = 95; // T-cycles before flush buffer (95)
     apu_ctx.sound_div_counter = apu_ctx.sound_div_tc;
-    update_filter();
 
     apu_ctx.ch3_pos = 0;
     apu_ctx.ch3_next_nibble = 0;
-
-    apu_ctx.master_volume = 100;
-    apu_ctx.master_fade = 0;
 
     apu_ctx.capacitors[0] = 0;
     apu_ctx.capacitors[1] = 0;
@@ -335,7 +329,7 @@ static void trigger(channel* chan) {
         chan->active = 1;
     }
 
-    if (chan->length_timer_counter == 0) {
+    if (chan->length_timer_counter <= 0) {
         chan->length_timer_counter = 64;
         if (chan == &apu_ctx.channels[2]) {
             chan->length_timer_counter = 256;
@@ -430,9 +424,9 @@ static void pulse_channel_reg4_write(u8 value, channel* chan) {
     }
 
     // Enabling in first half of length period clocks length
-    if (!old_length_enable && chan->length_timer_enable && (apu_ctx.sequence_counter & 1) == 1) {
-        update_length_timer(chan);
-    }
+    //if (!old_length_enable && chan->length_timer_enable && (apu_ctx.sequence_counter & 1) == 1) {
+        //update_length_timer(chan);
+    //}
 }
 
 static void pulse_channel_write(u16 address, u8 value) {
@@ -520,9 +514,8 @@ static void wave_channel_write(u16 address, u8 value) {
             // 10 = 50% (shift samples read from Wave RAM right once)
             // 11 = 25% (shift samples read from Wave RAM right twice)
             u8 vol = (value >> 5) & 0b11;
-            i8 wave_volume_lt[4] = { 4, 0, 1, 2 };
-            wave_channel->env_volume = wave_volume_lt[vol];
-            wave_channel->initial_volume = wave_volume_lt[vol];
+            wave_channel->env_volume = wave_volume_lookup[vol];
+            wave_channel->initial_volume = wave_volume_lookup[vol];
 
             /*
             if (vol == 0) {
@@ -602,9 +595,9 @@ static void noise_channel_write(u16 address, u8 value) {
             }
 
             // Enabling in first half of length period clocks length
-            if (!old_length_enable && noise_channel->length_timer_enable && (apu_ctx.sequence_counter & 1) == 1) {
-                update_length_timer(noise_channel);
-            }
+            //if (!old_length_enable && noise_channel->length_timer_enable && (apu_ctx.sequence_counter & 1) == 1) {
+                //update_length_timer(noise_channel);
+            //}
         } break;
     }
 }
@@ -665,6 +658,7 @@ void apu_write(u16 address, u8 value) {
     printf("Invalid apu_write($%2X, %2X)\n", address, value);
 }
 
+// digital to analog converter
 // returns -1 to 1 analog value
 static float dac(channel* chan, u8 amplitude) {
     if (!chan->dac_enable) {
@@ -678,9 +672,10 @@ static float dac(channel* chan, u8 amplitude) {
     return volume / 7.5 - 1;
 }
 
-// adds all of the channel levels and sums them together into left and right
+// averages all the channel levels and makes them stereo
 // modifies the values of mixer_out
 // [0] = left, [1] = right
+// returns -1 to 1 analog for each side
 static void mixer() {
     apu_ctx.mixer_out[0] = 0;
     apu_ctx.mixer_out[1] = 0;
@@ -704,7 +699,8 @@ static void mixer() {
 // volume scaler (amplifier)
 // once from nr50 (never mutes non-silent input)
 // once from volume knob (this can tho)
-// after this, they go through hpf
+// modifies the values of volume_out
+// [0] = left, [1] = right
 static void volume(float vol_mult) {
     i8 left_vol = apu_ctx.left_volume; // from nr50
     i8 right_vol = apu_ctx.right_volume; // from nr50
@@ -726,41 +722,40 @@ static void volume(float vol_mult) {
 }
 
 // high pass filter
-// FIX: i think this might be fucked
-static float hpf(float volume_output, u8 index) {
-    i16 out = 0;
+static float hpf(float input, u8 index) {
+    float output = 0;
 
     if (apu_ctx.hpf_enabled) {
-        out = (volume_output - apu_ctx.capacitors[index]);
+        output = input - apu_ctx.capacitors[index];
 
-        apu_ctx.capacitors[index] = volume_output - out * apu_ctx.capacitor_factor;
+        apu_ctx.capacitors[index] = input - output * apu_ctx.hpf_constant;
     } else {
-        out = volume_output;
+        output = input;
     }
 
-    return out;
+    return output;
+}
+
+static void apu_queue_audio() {
+    assert(apu_ctx.sound_buf->data != NULL);
+    audio_play(apu_ctx.sound_buf->data, apu_ctx.sound_buf->bytes);
+    memset(apu_ctx.sound_buf->data, 0, apu_ctx.sound_buf->bytes);
 }
 
 static void set_sound_buffer() {
-    if (apu_ctx.sound_buf->sample_index >= apu_ctx.sound_buf->samples*2) {
-        apu_queue_audio();
-        apu_ctx.sound_buf->sample_index = 0;
-    }
+    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.hpf_out[0];
+    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.hpf_out[1];
 
-    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.volume_out[0];
-    apu_ctx.sound_buf->data[apu_ctx.sound_buf->sample_index++] = apu_ctx.volume_out[1];
+    if (apu_ctx.sound_buf->sample_index >= apu_ctx.sound_buf->samples*2) {
+        apu_ctx.sound_buf->sample_index = 0;
+        apu_queue_audio();
+    }
 }
 
 static void prepare_output_buffer() {
     mixer();
-    volume(.01);
+    volume(0.03);
     set_sound_buffer();
-}
-
-void apu_queue_audio() {
-    assert(apu_ctx.sound_buf->data != NULL);
-    audio_play(apu_ctx.sound_buf->data, apu_ctx.sound_buf->bytes);
-    memset(apu_ctx.sound_buf->data, 0, apu_ctx.sound_buf->bytes);
 }
 
 static u8 get_nibble(u8 pos) {
@@ -780,7 +775,9 @@ void apu_tick() {
     if (!apu_ctx.apu_on) {
         return;
     }
-
+    
+    apu_ctx.hpf_out[0] = hpf(apu_ctx.volume_out[0], 0);
+    apu_ctx.hpf_out[1] = hpf(apu_ctx.volume_out[1], 1);
 
     for (int i = 0; i < 2; i++) {
         channel* pulse_channel = &apu_ctx.channels[i];
@@ -798,7 +795,7 @@ void apu_tick() {
             pulse_channel->level = dac(pulse_channel, amplitude);
 
             pulse_channel->duty_step_counter++;
-            pulse_channel->duty_step_counter &= 7; // % 8
+            pulse_channel->duty_step_counter &= 7; // %8
         }
     }
 

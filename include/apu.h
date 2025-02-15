@@ -67,22 +67,19 @@ typedef struct {
     float capacitors[2];
     float mixer_out[2];
     float volume_out[2];
-
-    double hpf_constant;
-    u8 hpf_enabled;
-    i32 capacitor_factor;
-
-    i16 master_volume;
-    i16 master_fade;
-    i16 master_dstvol;
-    u32 sequence_counter; // DIV APU
+    float hpf_out[2];
 
     buffer* sound_buf;
 
-    i32 div_apu_hz_counter; // clocks div apu when done
+    float hpf_constant;
+    bool hpf_enabled;
+
+    u8 sequence_counter; // DIV APU
+
+    i32 div_apu_hz_counter;
     u16 div_apu_hz_tc; // 8192
 
-    i16 sound_div_counter; // flush buffer
+    i16 sound_div_counter;
     u16 sound_div_tc; // 95
 
     // wave channel
@@ -121,5 +118,3 @@ void apu_tick();
 
 u8 apu_read(u16 address);
 void apu_write(u16 address, u8 value);
-
-void apu_queue_audio();

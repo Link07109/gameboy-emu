@@ -48,9 +48,7 @@ void audio_play(void* buf, u32 count) {
     };
 
     if (overqueued > 0) {
-        //nanosleep(&interval, NULL);
-        //SDL_ClearQueuedAudio(device);
-        return;
+        nanosleep(&interval, NULL);
     }
 
     if (SDL_QueueAudio(device, buf, count) != 0) {
