@@ -1,5 +1,5 @@
 {
-  description = "A very basic flake";
+  description = "Uses clang to build the project";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -14,6 +14,11 @@
     clangStdenv.mkDerivation {
       name = "clang-nix-shell";
       buildInputs = [ SDL2 ];
+
+      shellHook = ''
+        clang -std=c17 src/main.c -o gameboy.out -Wall -ISDL2 -lSDL2 -pthread -ggdb3
+        exit
+      '';
     };
   };
 }

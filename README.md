@@ -2,12 +2,25 @@
 Game Boy emulator written in C! (for fun)
 
 ## Build Instuctions:
-1. install nix
-2. run `nix develop` to enter the development shell that has all the dependencies included
-3. run `./build.sh` from within this development shell to build the project
+This project was made on Linux. If you're using Windows, install WSL in order to build it.
+
+1. Install nix using the [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer) by running this command:
+```sh
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+  sh -s -- install
+```
+2. Run this command to build the project:
+```shell
+nix develop
+```
+
+That's it!
 
 ## Usage:
-run `./gameboy.out <path_to_rom_here>`
+Run this command to use the emulator:
+```shell
+./gameboy.out <path_to_rom_here>
+```
 
 ## Credits:
 ### CPU and PPU:
