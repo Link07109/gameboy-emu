@@ -182,7 +182,6 @@ static void div_apu_clock() {
                     ch1->env_volume++;
                 }
             }
-
         }
     }
 }
@@ -376,7 +375,7 @@ static void trigger(channel* chan) {
 }
 
 static void pulse_channel_reg1_write(u8 value, channel* chan) {
-    chan->duty_val = duty_lookup[(value >> 6) & 3];
+    chan->duty_val = duty_lookup[value >> 6];
     chan->initial_length_timer = value & 0x3F; // 0b00111111
     chan->length_timer_counter = 64 - chan->initial_length_timer;
 }
@@ -631,6 +630,10 @@ void apu_write(u16 address, u8 value) {
 
     if (!apu_ctx.apu_on && address != 0xFF26 && address != 0xFF20) {
         // TODO: add exception for length timers also
+        // FF11 bottom 6 bits (pulse 1)
+        // FF16 bottom 6 bits (pulse 2)
+        // FF1B all 8 bits (wave)
+        // FF20 bottom 6 bits (noise)
         printf("APU is off, apu_write($%02X, %02X) ignored!\n", address, value);
         return;
     }
@@ -665,7 +668,7 @@ static float dac(channel* chan, u8 amplitude) {
         return 0;
     }
     
-    float volume = amplitude * chan->env_volume;
+    float volume = amplitude * chan->env_volume; // scaled digital, 0 to 15
     if (chan == &apu_ctx.channels[2]) { // wave channel
         volume = amplitude >> chan->env_volume;
     }
@@ -791,7 +794,7 @@ void apu_tick() {
         if (pulse_channel->period_div_counter <= 0) {
             pulse_channel->period_div_counter = pulse_channel->period_div_tc * 4;
 
-            i8 amplitude = (pulse_channel->duty_val >> pulse_channel->duty_step_counter) & 1;
+            u8 amplitude = (pulse_channel->duty_val >> pulse_channel->duty_step_counter) & 1;
             pulse_channel->level = dac(pulse_channel, amplitude);
 
             pulse_channel->duty_step_counter++;

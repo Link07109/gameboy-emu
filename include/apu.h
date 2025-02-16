@@ -50,7 +50,7 @@ typedef struct {
     u8 reg3;
     u8 period_low; // low 8 bits
     u8 period_high: 3; // high 3 bits
-    i16 period_val: 11; // full 11 bit period
+    u16 period_val: 11; // full 11 bit period
     u16 period_shadow;
     u16 period_div_tc; // tc = tick count
     u16 period_div_counter;
