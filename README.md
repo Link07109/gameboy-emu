@@ -1,8 +1,9 @@
 # gameboy-emu
 Game Boy emulator written in C! (for fun)
 
-## Build Instuctions:
-This project was made on Linux. If you're using Windows, install WSL in order to build it.
+## Linux
+### Build Instuctions:
+These steps also work for WSL (Windows Subsystem for Linux)
 
 1. Install nix using the [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer) by running this command:
 ```sh
@@ -16,10 +17,27 @@ nix develop
 
 That's it!
 
-## Usage:
+### Usage:
 Run this command to use the emulator:
 ```shell
 ./gameboy.out <path_to_rom_here>
+```
+
+## Windows
+### Build Instuctions:
+1. Install MINGW64
+2. Download `SDL2-devel-2.32.0-mingw.zip` from the [SDL repository](https://github.com/libsdl-org/SDL/releases/tag/release-2.32.0) and extract it
+3. Copy the `x86_64-w64-mingw32` folder anywhere you want and rename it to `SDL2-devel`. I put mine in my C: directory.
+4. Edit the `windows.bat` file to point to the folder mentioned above
+5. Copy the `SDL2.dll` file from the `bin` subdirectory of the folder mentioned above and put it into the project root
+6. Run the `windows.bat` file
+
+The exe should now be built!
+
+### Usage:
+Run this command to use the emulator:
+```shell
+.\gameboy.exe <path_to_rom_here>
 ```
 
 ## Credits:

@@ -1,4 +1,6 @@
 *.out
+*.exe
+*.dll
 roms/tetris.gb
 roms/zelda-awakening.gb
 *.battery
